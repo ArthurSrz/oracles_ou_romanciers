@@ -1,11 +1,12 @@
 import streamlit as st
-import ollama
+import requests
 import json
 import re
 from wordcloud import WordCloud
 import matplotlib.pyplot as plt
 from collections import Counter
 import pandas as pd
+import time
 
 st.set_page_config(
     page_title="Générateur de Récits Parallèles",
@@ -87,6 +88,76 @@ story_length = st.sidebar.selectbox(
     "Longueur du récit :",
     ["Court (100-200 mots)", "Moyen (300-500 mots)", "Long (600-800 mots)"]
 )
+
+# Configuration Hugging Face
+HF_API_URL = "https://api-inference.huggingface.co/models/microsoft/DialoGPT-medium"
+HF_API_URL_FR = "https://api-inference.huggingface.co/models/gilf/french-camembert-postag-model"
+
+# Fonction pour appeler l'API Hugging Face
+def call_huggingface_api(prompt, max_retries=3):
+    # Utilisation du token depuis les secrets Streamlit
+    api_token = st.secrets.get("HUGGINGFACE_API_TOKEN", "")
+
+    if not api_token:
+        st.error("Token Hugging Face manquant. Veuillez configurer HUGGINGFACE_API_TOKEN dans les secrets.")
+        return None
+
+    headers = {"Authorization": f"Bearer {api_token}"}
+
+    # Modèle français spécialisé
+    models = [
+        "OpenLLM-France/Lucie-7B"
+    ]
+
+    for model in models:
+        api_url = f"https://api-inference.huggingface.co/models/{model}"
+
+        for attempt in range(max_retries):
+            try:
+                data = {"inputs": prompt, "parameters": {"max_length": 500, "temperature": 0.8}}
+                response = requests.post(api_url, headers=headers, json=data, timeout=30)
+
+                if response.status_code == 200:
+                    result = response.json()
+                    if isinstance(result, list) and len(result) > 0:
+                        return result[0].get('generated_text', prompt)
+                    elif isinstance(result, dict) and 'generated_text' in result:
+                        return result['generated_text']
+                elif response.status_code == 503:
+                    st.warning(f"Modèle {model} en cours de chargement... Tentative {attempt + 1}")
+                    time.sleep(10)
+                    continue
+                else:
+                    st.warning(f"Erreur avec le modèle {model}: {response.status_code}")
+                    break
+
+            except Exception as e:
+                st.warning(f"Erreur de connexion avec {model}: {str(e)}")
+                break
+
+    # Si tous les modèles échouent, génération de fallback
+    return generate_fallback_story(prompt)
+
+# Fonction de fallback pour générer une histoire simple
+def generate_fallback_story(prompt):
+    epoch_stories = {
+        "Renaissance": "En cette époque de renouveau, un artiste florentin découvrit dans son atelier une machine étrange, aux engrenages d'une précision inouïe. Cette invention, léguée par un mystérieux alchimiste, permettait de capturer la lumière même et de la transformer en pigments aux couleurs impossibles. Ses œuvres, d'une beauté surnaturelle, attirèrent l'attention de mécènes venus de contrées lointaines. Mais l'artiste réalisa bientôt que chaque toile peinte avec ces couleurs magiques volait un fragment de réalité au monde, créant des échos entre les dimensions.",
+
+        "Révolution française": "Dans les rues de Paris révolutionnaire, une imprimerie clandestine produisait des pamphlets aux propriétés extraordinaires. L'encre, mélangée avec des herbes rares trouvées dans les jardins royaux abandonnés, rendait les mots littéralement convaincants - quiconque lisait ces textes se trouvait irrésistiblement poussé à agir selon leur contenu. Les révolutionnaires utilisèrent ce pouvoir avec parcimonie, conscients que leur liberté nouvellement acquise dépendait de la volonté authentique du peuple, non de la magie de l'encre.",
+
+        "Révolution industrielle": "Les machines à vapeur de cette Manchester alternative fonctionnaient non pas au charbon, mais aux rêves collectés dans les quartiers ouvriers. Des collecteurs nocturnes parcouraient les rues, récupérant dans des fioles de cristal les songes abandonnés par les travailleurs épuisés. Ces rêves, une fois distillés, produisaient une énergie pure et inépuisable. Mais quand les ouvriers cessèrent de rêver, privés de leurs aspirations, les machines s'arrêtèrent une à une, et la société dut repenser son rapport au progrès.",
+
+        "Belle Époque": "L'Exposition universelle de Paris accueillait cette année-là un pavillon secret, visible seulement à la tombée du jour. Les inventions exposées défiaient les lois de la physique : des automobiles volantes alimentées par la musique des cabarets, des téléphones permettant de converser avec les morts, des photographies capturant non pas les visages mais les émotions. Les visiteurs, ébahis, repartaient avec la certitude qu'un monde nouveau était né, où la science et la poésie ne faisaient qu'un.",
+
+        "Années folles": "Dans les clubs de jazz de Montmartre, la musique avait acquis des propriétés alchimiques. Les notes de saxophone transformaient littéralement l'atmosphère, rendant l'air plus léger, permettant aux danseurs de défier la gravité quelques instants. Les musiciens, conscients de leur pouvoir, créaient des mélodies capables d'effacer temporairement les traumatismes de la Grande Guerre. Mais ils découvrirent bientôt que cette magie avait un prix : elle consumait lentement leur propre mémoire, les condamnant à rejouer éternellement les mêmes airs."
+    }
+
+    # Retourne une histoire prédéfinie selon l'époque
+    for epoch_key, story in epoch_stories.items():
+        if epoch_key.lower() in prompt.lower():
+            return story
+
+    return epoch_stories["Renaissance"]  # Histoire par défaut
 
 # Fonction pour générer le prompt
 def generate_prompt(epoch, tech, social, fantasy, length):
@@ -172,18 +243,13 @@ with col1:
             try:
                 prompt = generate_prompt(selected_epoch, tech_level, social_change, fantasy_elements, story_length)
 
-                # Appel à Ollama
-                response = ollama.chat(
-                    model='llama3.2:3b',  # Utilise le modèle disponible
-                    messages=[
-                        {
-                            'role': 'user',
-                            'content': prompt
-                        }
-                    ]
-                )
+                # Appel à l'API Hugging Face ou fallback
+                generated_story = call_huggingface_api(prompt)
 
-                generated_story = response['message']['content']
+                if not generated_story:
+                    # Si l'API échoue, utilise le fallback
+                    generated_story = generate_fallback_story(prompt)
+                    st.info("🎭 Histoire générée en mode hors-ligne (API Hugging Face indisponible)")
 
                 # Stockage dans la session
                 st.session_state.current_story = generated_story
@@ -191,7 +257,12 @@ with col1:
 
             except Exception as e:
                 st.error(f"Erreur lors de la génération : {str(e)}")
-                st.info("Assurez-vous qu'Ollama est installé et qu'un modèle est disponible (ex: llama3.2)")
+                # Génération de fallback en cas d'erreur
+                prompt = generate_prompt(selected_epoch, tech_level, social_change, fantasy_elements, story_length)
+                generated_story = generate_fallback_story(prompt)
+                st.session_state.current_story = generated_story
+                st.session_state.current_analysis = analyze_text(generated_story)
+                st.info("🎭 Histoire générée en mode hors-ligne")
 
     # Affichage du récit généré
     if hasattr(st.session_state, 'current_story'):

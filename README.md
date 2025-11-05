@@ -24,14 +24,9 @@ Cette application Streamlit génère des histoires alternatives en prenant des �
 
 ### Prérequis
 
-1. **Ollama** doit être installé sur votre machine avec un modèle français (recommandé: `llama3.2`)
-   ```bash
-   # Installation d'Ollama
-   curl -fsSL https://ollama.ai/install.sh | sh
-
-   # Téléchargement du modèle
-   ollama pull llama3.2
-   ```
+1. **Token Hugging Face** (optionnel) : Obtenez un token gratuit sur [Hugging Face](https://huggingface.co/settings/tokens)
+   - L'application fonctionne sans token avec des histoires pré-écrites
+   - Avec un token, elle utilise le modèle `OpenLLM-France/Lucie-7B` pour des générations dynamiques
 
 2. **Python 3.8+**
 
@@ -45,9 +40,11 @@ pip install -r requirements.txt
 
 ## Utilisation
 
-1. Assurez-vous qu'Ollama est en cours d'exécution :
-   ```bash
-   ollama serve
+### Configuration locale
+
+1. (Optionnel) Ajoutez votre token Hugging Face dans `.streamlit/secrets.toml` :
+   ```toml
+   HUGGINGFACE_API_TOKEN = "votre_token_ici"
    ```
 
 2. Lancez l'application Streamlit :
@@ -57,12 +54,19 @@ pip install -r requirements.txt
 
 3. Ouvrez votre navigateur à l'adresse indiquée (généralement `http://localhost:8501`)
 
-4. Configurez les paramètres dans la barre latérale :
+### Déploiement sur Streamlit Cloud
+
+1. Ajoutez votre token dans les secrets de l'application Streamlit Cloud
+2. L'application fonctionne automatiquement avec l'API Hugging Face
+
+### Utilisation de l'interface
+
+1. Configurez les paramètres dans la barre latérale :
    - Choisissez une époque historique
    - Ajustez les curseurs de divergence
    - Sélectionnez la longueur du récit
 
-5. Cliquez sur "Générer un récit parallèle" et découvrez votre histoire alternative !
+2. Cliquez sur "Générer un récit parallèle" et découvrez votre histoire alternative !
 
 ## Structure du projet
 
@@ -81,7 +85,7 @@ L'application explore l'idée que l'IA, entraînée sur des données historiques
 ## Technologies utilisées
 
 - **Streamlit** : Interface web interactive
-- **Ollama** : Génération de texte avec modèles locaux
+- **Hugging Face Inference API** : Génération de texte avec `OpenLLM-France/Lucie-7B`
 - **WordCloud** : Visualisation des mots-clés
 - **Matplotlib** : Graphiques et visualisations
 - **Pandas** : Manipulation de données
