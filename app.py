@@ -453,17 +453,6 @@ with col1:
         st.subheader("📜 Récit généré")
         st.write(st.session_state.current_story)
 
-        # Bouton pour sauvegarder
-        if st.button("💾 Sauvegarder ce récit"):
-            try:
-                with open(f"/Users/arthursarazin/Documents/oracles_ou_romanciers/recit_{selected_epoch.replace(' ', '_')}_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.txt", "w", encoding='utf-8') as f:
-                    f.write(f"Époque : {selected_epoch}\n")
-                    f.write(f"Paramètres : Tech={tech_level}, Social={social_change}, Fantasy={fantasy_elements}\n\n")
-                    f.write(st.session_state.current_story)
-                st.success("Récit sauvegardé !")
-            except Exception as e:
-                st.error(f"Erreur lors de la sauvegarde : {str(e)}")
-
     # Section d'historique des récits
     if hasattr(st.session_state, 'story_history') and st.session_state.story_history:
         st.markdown("---")
